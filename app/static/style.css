@@ -1,0 +1,20 @@
+body { margin: 0; font: 16px/1.6 system-ui, sans-serif; color: #222; background: #fafafa; }
+main { max-width: 800px; margin: 24px auto; padding: 0 20px 40px; }
+h1 { font-size: 26px; } h2 { font-size: 21px; } h3 { font-size: 18px; }
+label { display: block; margin: 12px 0; }
+input, select, textarea { display: block; width: 100%; box-sizing: border-box; padding: 8px; font: inherit; }
+textarea { resize: vertical; }
+button { padding: 8px 16px; margin: 8px 8px 8px 0; font: inherit; cursor: pointer; }
+button:disabled { cursor: wait; opacity: .6; }
+#error { color: #a11; padding: 10px; border: 1px solid #a11; }
+#loading { padding: 10px; background: #edf2f8; }
+.turn { border-top: 1px solid #ddd; padding: 12px 0; }
+.turn p, #report p { white-space: pre-wrap; overflow-wrap: anywhere; }
+#report { border-top: 2px solid #aaa; padding-top: 16px; }
+[hidden] { display: none !important; }
+input[type="checkbox"] { display: inline-block; width: auto; }
+details { margin: 16px 0; }
+ .table-scroll { overflow-x: auto; }
+ .table-scroll table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+ .table-scroll th, .table-scroll td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; vertical-align: top; }
+ #usage-warning { padding: .75rem; background: #fff3cd; color: #664d03; }

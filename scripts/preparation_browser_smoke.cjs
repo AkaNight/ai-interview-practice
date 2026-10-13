@@ -1,0 +1,72 @@
+// Uses an isolated demo server; never changes real settings or deletes real records.
+const {chromium} = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const fs = require("node:fs/promises");
+
+async function main() {
+  const baseURL = process.env.INTERVIEW_TEST_URL || "http://127.0.0.1:8003";
+  assert.equal((await (await fetch(`${baseURL}/api/health`)).json()).ai_mode, "demo");
+  const browser = await chromium.launch({headless: true, executablePath: process.env.BROWSER_EXECUTABLE || undefined});
+  const page = await browser.newPage({viewport: {width: 1000, height: 1000}});
+  const errors = []; page.on("pageerror", error => errors.push(error.message));
+  try {
+    const initial = await (await fetch(`${baseURL}/api/preparations`)).json();
+    await page.goto(baseURL);
+    await page.getByText("当前为离线演示：", {exact: false}).waitFor();
+    await page.locator("#resume").setInputFiles(path.resolve("examples/sample_resume.docx"));
+    await page.locator("#company").fill("资料复用验收公司");
+    await page.locator("#position").fill("资料复用验收岗位");
+    await page.locator("#interview-type").selectOption({label: "半结构化面试"});
+    await page.locator("#notes").fill("关注个人职责和验证方法");
+    await page.getByRole("button", {name: "准备并开始面试", exact: true}).click();
+    await page.getByText("面试官（第 1 轮）：", {exact: false}).waitFor();
+    const originalId = new URL(page.url()).searchParams.get("session");
+    const original = await (await fetch(`${baseURL}/api/interviews/${originalId}`)).json();
+    const pid = original.preparation_id;
+    await page.getByRole("button", {name: "结束面试并生成报告", exact: true}).click();
+    await page.getByRole("heading", {name: "面试复盘报告", exact: true}).waitFor();
+    await page.getByRole("button", {name: "历史面试", exact: true}).click();
+    await page.locator(`[data-session-id="${originalId}"]`).getByRole("button", {name: "复用设置和资料"}).click();
+    await page.locator("#preparation-detail").waitFor({state: "visible"});
+    assert.equal(await page.locator("#company").inputValue(), original.company);
+    assert.equal(await page.locator("#notes").inputValue(), "关注个人职责和验证方法");
+    assert.ok(await page.locator("#use-saved-resume").isChecked());
+    assert.ok(await page.locator("#reuse-research").isChecked());
+    assert.ok((await page.locator("#preparation-detail").textContent()).includes("资料来源"));
+    await fs.mkdir(path.resolve("data/verification"), {recursive: true});
+    await page.screenshot({path: path.resolve("data/verification/preparation_library.png"), fullPage: true});
+    await page.getByRole("button", {name: "准备并开始面试", exact: true}).click();
+    await page.getByText("面试官（第 1 轮）：", {exact: false}).waitFor();
+    const reusedId = new URL(page.url()).searchParams.get("session");
+    const reused = await (await fetch(`${baseURL}/api/interviews/${reusedId}`)).json();
+    assert.notEqual(reusedId, originalId);
+    assert.equal(reused.research_origin, "reused");
+    assert.equal(reused.resume_id, original.resume_id);
+    assert.equal(reused.turns.length, 1);
+    assert.equal(reused.turns[0].answer, null);
+    assert.equal((await (await fetch(`${baseURL}/api/preparations`)).json()).total, initial.total + 1);
+    await page.getByRole("button", {name: "结束面试并生成报告", exact: true}).click();
+    await page.getByRole("heading", {name: "面试复盘报告", exact: true}).waitFor();
+    await page.getByRole("button", {name: "开始新面试", exact: true}).click();
+    await page.getByText("当前为离线演示：", {exact: false}).waitFor();
+    await page.locator("#preparation-library").evaluate(element => { element.open = true; });
+    await page.locator("#preparation-select").selectOption(pid);
+    await page.locator("#preparation-detail").waitFor({state: "visible"});
+    await page.locator("#position").fill("另一个岗位");
+    assert.ok(!(await page.locator("#reuse-research").isChecked()));
+    assert.ok(await page.locator("#reuse-research").isDisabled());
+    await page.locator("#position").fill(original.position);
+    await page.locator("#reuse-research").uncheck();
+    await page.getByRole("button", {name: "准备并开始面试", exact: true}).click();
+    await page.getByText("面试官（第 1 轮）：", {exact: false}).waitFor();
+    const freshId = new URL(page.url()).searchParams.get("session");
+    const fresh = await (await fetch(`${baseURL}/api/interviews/${freshId}`)).json();
+    assert.equal(fresh.research_origin, "fresh");
+    assert.notEqual(fresh.preparation_id, pid);
+    assert.equal((await (await fetch(`${baseURL}/api/preparations`)).json()).total, initial.total + 2);
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({result: "passed", checked: ["auto_save", "history_reuse", "restore_settings", "saved_resume", "reuse_new_session", "scope_change", "fresh_research"]}));
+  } finally { await browser.close(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

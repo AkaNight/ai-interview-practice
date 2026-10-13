@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 模拟面试 · 语音回答</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>AI 模拟面试</h1>
+  <p id="mode">正在检查配置……</p>
+  <p>简历内容和文字回答会发送至所选面试 API；录音会发送至所选语音转写 API。使用转发接口时，内容也会经过转发服务。记录和录音保存在本机。</p>
+  <p id="loading" role="status" aria-live="polite" hidden></p>
+  <p id="error" role="alert" hidden></p>
+  <p id="usage-warning" role="alert" hidden></p>
+  <details id="usage-panel">
+    <summary>用量统计与预算提醒</summary>
+    <p id="usage-summary">正在读取本机用量……</p>
+    <p id="usage-scope"></p>
+    <button id="usage-refresh" type="button">刷新用量</button>
+    <form id="usage-form">
+      <label for="usage-request-limit">每月请求次数提醒（可留空）</label><input id="usage-request-limit" type="number" min="1" max="10000000" step="1">
+      <label for="usage-budget">每月预算提醒（元，可留空）</label><input id="usage-budget" type="number" min="0.0001" max="10000000" step="any">
+      <p>达到 80% 时提醒，达到设定值时再次提醒；不会自动阻止调用。费用估算不等于账户余额或账单，未知费用也可能已产生花费。</p>
+      <label for="usage-price-kind">配置单价</label><select id="usage-price-kind"><option value="ai">当前面试模型</option><option value="voice">当前语音模型</option></select>
+      <p id="usage-price-context"></p>
+      <div id="usage-token-prices">
+        <label for="usage-input-price">输入：元 / 百万 token（可留空）</label><input id="usage-input-price" type="number" min="0" max="1000000" step="any">
+        <label for="usage-output-price">输出：元 / 百万 token（可留空）</label><input id="usage-output-price" type="number" min="0" max="1000000" step="any">
+      </div>
+      <div id="usage-audio-prices" hidden>
+        <label for="usage-audio-price">转写：元 / 分钟（可留空）</label><input id="usage-audio-price" type="number" min="0" max="10000" step="any">
+      </div>
+      <p>请按自己的平台填写人民币单价，含平台倍率；单价按服务地址和模型分别保存，只用于之后的请求。估算不区分输入缓存折扣，不包含联网工具等额外费用。全部留空可移除该模型单价。</p>
+      <button type="submit">保存提醒和单价</button>
+      <p id="usage-settings-result" role="status"></p>
+    </form>
+    <h3>请求记录</h3>
+    <p>包含网络自动重试和结构校验重试；“接口返回”指 HTTP 成功，不代表生成内容通过校验。语音分钟按每次转写请求累计，重试也计入。</p>
+    <div id="usage-list" class="table-scroll"></div>
+    <button id="usage-prev" type="button" hidden>上一页请求</button><button id="usage-next" type="button" hidden>下一页请求</button>
+  </details>
+  <button id="show-history" type="button">历史面试</button>
+  <section id="history-section" hidden>
+    <h2>历史面试</h2>
+    <p id="history-count"></p>
+    <div id="history-list"></div>
+    <button id="history-prev" type="button">上一页</button><button id="history-next" type="button">下一页</button>
+    <button id="close-history" type="button">收起历史</button>
+  </section>
+
+  <details id="api-settings">
+    <summary>API 设置（保存在本机）</summary>
+    <form id="api-settings-form">
+      <label for="api-provider">AI 服务</label>
+      <select id="api-provider"><option value="demo">离线演示</option><option value="deepseek">DeepSeek 官方</option><option value="openai">OpenAI 官方</option><option value="compatible">其他兼容接口 / 转发服务</option></select>
+      <label for="api-base-url">API Base URL</label><input id="api-base-url" type="url" maxlength="500" placeholder="例如：https://api.deepseek.com">
+      <label for="api-model">模型名称</label><input id="api-model" maxlength="150" placeholder="例如：deepseek-flash">
+      <label for="api-format">接口类型</label><select id="api-format"><option value="auto">使用服务默认值</option><option value="chat">Chat Completions：本地提取简历 + 独立搜索</option><option value="responses">Responses：需要接口支持文件输入和内置搜索</option></select>
+      <label for="api-key">API Key</label><input id="api-key" type="password" maxlength="500" autocomplete="off" placeholder="填写新密钥；留空保留该服务已保存的密钥">
+      <p id="api-key-status"></p>
+      <label><input id="api-clear-key" type="checkbox">删除当前服务已保存的密钥</label>
+      <p>不需要注册或登录。保存后立即生效；密钥不回显、不写入浏览器存储。切换服务或模型后请开始新面试。</p>
+      <button type="submit">保存 API 设置</button><button id="api-test" type="button">测试连接</button>
+      <p id="api-settings-result" role="status" aria-live="polite"></p>
+    </form>
+  </details>
+
+  <details id="voice-settings">
+    <summary>语音转写设置（与面试模型分开）</summary>
+    <form id="voice-settings-form">
+      <label for="voice-provider">语音服务</label><select id="voice-provider"><option value="siliconflow">硅基流动</option><option value="compatible">兼容语音转写接口</option></select>
+      <label for="voice-base-url">语音 API Base URL</label><input id="voice-base-url" type="url" maxlength="500">
+      <label for="voice-model">语音识别模型</label><input id="voice-model" maxlength="150" placeholder="Qwen/Qwen3-ASR-1.7B">
+      <label for="voice-key">语音 API Key</label><input id="voice-key" type="password" autocomplete="off" maxlength="500" placeholder="留空保留已保存的密钥">
+      <p id="voice-key-status"></p>
+      <label><input id="voice-clear-key" type="checkbox">删除当前语音服务密钥</label>
+      <button type="submit">保存语音设置</button><button id="voice-test" type="button">测试语音连接</button>
+      <p id="voice-settings-result" role="status" aria-live="polite"></p>
+    </form>
+  </details>
+
+  <section id="setup">
+    <h2>面试设置</h2>
+    <form id="setup-form">
+      <details id="preparation-library">
+        <summary>准备资料库 · 复用以前的设置和资料</summary>
+        <p>联网准备完成后自动保存。可查看资料和来源，换模型后也能复用；每次会根据当前简历重新生成策略。</p>
+        <label for="preparation-select">选择以前的准备</label>
+        <select id="preparation-select"><option value="">新准备（重新联网）</option></select>
+        <p id="preparation-count"></p>
+        <button id="preparation-prev" type="button" hidden>上一页资料</button><button id="preparation-next" type="button" hidden>下一页资料</button>
+        <button id="preparation-refresh" type="button">刷新资料列表</button>
+        <div id="preparation-detail" hidden></div>
+        <div id="reuse-research-option" hidden>
+          <label><input id="reuse-research" type="checkbox">使用这份资料，跳过联网搜索</label>
+          <p id="reuse-research-status">资料可能过时；取消勾选会按当前设置重新联网。</p>
+          <button id="delete-preparation" type="button">删除选中的准备资料</button>
+        </div>
+      </details>
+      <div id="saved-resume-option" hidden>
+        <label><input id="use-saved-resume" type="checkbox">沿用上次简历 <span id="saved-resume-name"></span></label>
+      </div>
+      <label for="resume">简历（PDF / DOCX，最多 10 MB）</label><input id="resume" type="file" accept=".pdf,.docx" required>
+      <label for="company">目标公司</label><input id="company" maxlength="200" required placeholder="例如：中国银行">
+      <label for="position">应聘岗位</label><input id="position" maxlength="200" required placeholder="例如：信息科技岗">
+      <label for="interview-type">面试类型</label><select id="interview-type">
+        <option>综合模拟</option><option>技术面</option><option>HR面</option>
+        <option>半结构化面试</option><option>简历面</option><option>压力面</option>
+      </select>
+      <label for="practice-mode">使用模式</label><select id="practice-mode"><option value="simulation">模拟面试（结束后统一复盘）</option><option value="training">专项练习（每题讲评，可重答）</option><option value="group">无领导小组讨论（AI 队友）</option></select>
+      <div id="training-focus-option" hidden>
+        <label for="training-focus">练习重点</label><textarea id="training-focus" maxlength="500" rows="2" placeholder="例如：30秒项目介绍、个人职责、Suricata规则验证"></textarea>
+      </div>
+      <div id="group-options" hidden>
+        <label for="group-size">小组总人数（包含你）</label><select id="group-size"><option value="3">3 人（2 位 AI 队友）</option><option value="4">4 人（3 位 AI 队友）</option><option value="5" selected>5 人（4 位 AI 队友）</option><option value="6">6 人（5 位 AI 队友）</option></select>
+        <label for="group-topic">讨论主题（可选）</label><textarea id="group-topic" maxlength="1000" rows="2" placeholder="例如：技术方案优先级、资源分配；留空按岗位生成模拟案例"></textarea>
+        <p>AI 队友用文字发言，你可以打字或录音回应。案例为虚构练习，不代表公司真题；没有预设领导。</p>
+      </div>
+      <label for="duration">目标时长</label><select id="duration"><option value="10">10 分钟</option><option value="20" selected>20 分钟</option><option value="30">30 分钟</option></select>
+      <label for="notes">补充说明（可选）</label><textarea id="notes" maxlength="3000" rows="3"></textarea>
+      <p>模拟面试只提问；专项练习每题后暂停讲评，可以继续或重答。读讲评的暂停时间不计入练习时长。</p>
+      <button type="submit">准备并开始面试</button>
+    </form>
+  </section>
+
+  <section id="interview" hidden>
+    <h2 id="session-title"></h2>
+    <p id="session-status"></p>
+    <p id="training-plan-status" hidden></p>
+    <button id="prepare" type="button" hidden>继续准备并开始</button>
+    <section id="group-panel" hidden></section>
+    <div id="conversation" aria-live="polite"></div>
+    <section id="voice-answer" hidden>
+      <h3>语音回答</h3>
+      <p id="voice-status" role="status" aria-live="polite">点击开始录音，回答后点击结束录音。</p>
+      <button id="record-start" type="button">开始录音</button><button id="record-stop" type="button" hidden>结束录音并转写</button>
+      <button id="transcribe-retry" type="button" hidden>重试已保存录音的转写</button>
+      <p>转写后请检查下方文字，修改识别错误，再提交回答。也可以直接打字。</p>
+    </section>
+    <form id="answer-form" hidden>
+      <label for="answer">回答文字（可编辑转写）</label><textarea id="answer" rows="6" maxlength="15000" required></textarea>
+      <button id="submit-answer" type="submit">提交回答</button>
+    </form>
+    <section id="training-controls" hidden>
+      <p>本题已保存并讲评，可以阅读后继续，或重答本题。每次重答会单独保存。</p>
+      <button id="training-continue" type="button">继续下一题</button><button id="training-repeat" type="button">重答本题</button>
+    </section>
+    <button id="finish" type="button" hidden>结束面试并生成报告</button>
+    <section id="report" hidden></section>
+    <button id="upgrade-report" type="button" hidden>补充详细复盘（调用面试 API）</button>
+    <button id="practice-again" type="button" hidden>按本轮计划开始专项练习</button>
+    <p id="practice-again-note" hidden>沿用本轮简历和已保存的研究资料，用当前面试模型生成新的专项策略和讲评。</p>
+    <p><button id="new-session" type="button">开始新面试</button></p>
+  </section>
+</main>
+</body>
+</html>
