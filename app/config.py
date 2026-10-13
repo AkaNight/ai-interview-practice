@@ -1,11 +1,14 @@
 import os
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
+# Keep user data outside the single-file EXE's temporary extraction directory.
+RUNTIME_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else ROOT
 PROVIDER_DEFAULTS = {
     "demo": {"base_url": "", "main_model": ""},
     "openai": {"base_url": "https://api.openai.com/v1", "main_model": "gpt-4.1"},
@@ -39,11 +42,11 @@ class Settings:
 
     @classmethod
     def from_env(cls, load_local=True):
-        load_dotenv(ROOT / ".env", override=False)
+        load_dotenv(RUNTIME_ROOT / ".env", override=False)
         data_dir = Path(os.getenv("DATA_DIR", "data"))
         settings = cls(
-            data_dir=(data_dir if data_dir.is_absolute() else ROOT / data_dir),
-            ai_mode=os.getenv("AI_MODE", "openai").lower(),
+            data_dir=(data_dir if data_dir.is_absolute() else RUNTIME_ROOT / data_dir),
+            ai_mode=os.getenv("AI_MODE", "demo").lower(),
             api_key=os.getenv("DEEPSEEK_API_KEY", "") if os.getenv("AI_MODE") == "deepseek" else os.getenv("OPENAI_API_KEY", ""),
             main_model=os.getenv("MAIN_MODEL", "gpt-4.1"),
             api_timeout_seconds=float(os.getenv("API_TIMEOUT_SECONDS", "90")),

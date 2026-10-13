@@ -6,11 +6,11 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 ROOT_FILES = {".env.example", ".gitignore", "README.md", "RELEASE_NOTES.md",
-              "USAGE_RELEASE_ACCEPTANCE.md", "pytest.ini", "requirements.txt", "requirements.lock.txt", "run.py", "run.bat"}
+              "USAGE_RELEASE_ACCEPTANCE.md", "pytest.ini", "requirements.txt", "requirements.lock.txt", "requirements-build.txt", "run.py", "run.bat"}
 ROOT_FILES.update(path.name for path in ROOT.glob("*_ACCEPTANCE.md"))
-PATTERNS = {"app": {".py", ".html", ".js", ".css"}, "tests": {".py"}, "scripts": {".py", ".cjs"}}
+PATTERNS = {"app": {".py", ".html", ".js", ".css"}, "tests": {".py"}, "scripts": {".py", ".cjs"}, "docs": {".md"}}
 SECRET = re.compile(rb"(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{30,})")
 
 

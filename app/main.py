@@ -76,7 +76,7 @@ def create_app(settings=None, ai=None):
     @application.get("/api/health")
     def health():
         active = application.state.settings
-        return {"status": "ok", "version": VERSION, "phase": 3, "ai_mode": active.ai_mode,
+        return {"status": "ok", "application": "ai-interview-practice", "version": VERSION, "phase": 3, "ai_mode": active.ai_mode,
                 "ai_ready": active.ai_mode == "demo" or bool(active.api_key),
                 "voice_ready": bool(application.state.voice_settings.active.api_key),
                 "main_model": active.main_model, "max_upload_mb": active.max_upload_mb}
